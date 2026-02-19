@@ -1,0 +1,66 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Weekly on Monday at 8am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/Beingpax/VoiceInk.git
+
+      - name: Fetch upstream
+        run: git fetch upstream
+
+      - name: Check for new changes
+        id: check
+        run: |
+          UPSTREAM_HEAD=$(git rev-parse upstream/main)
+          # Check if upstream/main is already an ancestor of our main
+          if git merge-base --is-ancestor "$UPSTREAM_HEAD" HEAD; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rebase our commits on top of upstream
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          git rebase upstream/main
+          git push origin main --force-with-lease
+
+      - name: Get upstream version
+        if: steps.check.outputs.has_changes == 'true'
+        id: version
+        run: |
+          # Extract MARKETING_VERSION from the Xcode project
+          VERSION=$(grep -m1 'MARKETING_VERSION' VoiceInk.xcodeproj/project.pbxproj | sed 's/.*= *\([0-9.]*\).*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Detected version: $VERSION"
+
+      - name: Tag and trigger build
+        if: steps.check.outputs.has_changes == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          # Delete existing tag if it exists (version bump = new build)
+          git push origin ":refs/tags/${TAG}" 2>/dev/null || true
+          git tag -f "$TAG"
+          git push origin "$TAG"
