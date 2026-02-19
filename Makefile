@@ -4,7 +4,7 @@ WHISPER_CPP_DIR := $(DEPS_DIR)/whisper.cpp
 FRAMEWORK_PATH := $(WHISPER_CPP_DIR)/build-apple/whisper.xcframework
 LOCAL_DERIVED_DATA := $(CURDIR)/.local-build
 
-.PHONY: all clean whisper setup build local check healthcheck help dev run
+.PHONY: all clean whisper setup build local check healthcheck help dev run install update
 
 # Default target
 all: check build
@@ -92,6 +92,49 @@ run:
 			exit 1; \
 		fi; \
 	fi
+
+# Install to /Applications (signed with local dev certificate for stable permissions)
+install: check setup
+	@echo "Building VoiceInk (signed)..."
+	@IDENTITY=$$(security find-identity -v -p codesigning | head -1 | sed 's/.*"\(.*\)"/\1/'); \
+	if [ -z "$$IDENTITY" ] || echo "$$IDENTITY" | grep -q "0 valid"; then \
+		echo "No signing identity found, falling back to ad-hoc build..."; \
+		$(MAKE) local; \
+	else \
+		echo "Signing with: $$IDENTITY"; \
+		xcodebuild -project VoiceInk.xcodeproj -scheme VoiceInk -configuration Debug \
+			CODE_SIGN_IDENTITY="$$IDENTITY" \
+			CODE_SIGN_STYLE=Manual \
+			CODE_SIGNING_REQUIRED=YES \
+			CODE_SIGNING_ALLOWED=YES \
+			DEVELOPMENT_TEAM=3Z6NS227NV \
+			PROVISIONING_PROFILE_SPECIFIER="" \
+			CODE_SIGN_ENTITLEMENTS=$(CURDIR)/VoiceInk/VoiceInk.local.entitlements \
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS='$$(inherited) LOCAL_BUILD' \
+			build; \
+	fi
+	@APP_PATH=$$(find "$$HOME/Library/Developer/Xcode/DerivedData" -name "VoiceInk.app" -path "*/Debug/*" -type d | head -1) && \
+	if [ -n "$$APP_PATH" ]; then \
+		echo "Installing to /Applications..."; \
+		if [ -d "/Applications/VoiceInk.app" ]; then rm -rf "/Applications/VoiceInk.app"; fi; \
+		ditto "$$APP_PATH" "/Applications/VoiceInk.app"; \
+		xattr -cr "/Applications/VoiceInk.app"; \
+		echo "VoiceInk installed to /Applications/VoiceInk.app"; \
+	else \
+		echo "Error: Could not find built VoiceInk.app"; \
+		exit 1; \
+	fi
+
+# Sync with upstream and rebuild
+update:
+	@echo "Fetching upstream changes..."
+	@git fetch upstream
+	@echo "Merging upstream/main into main..."
+	@git checkout main
+	@git merge upstream/main -m "Merge upstream changes"
+	@echo "Pushing to origin..."
+	@git push origin main
+	@echo "Upstream changes merged. Run 'make install' to rebuild."
 
 # Cleanup
 clean:
