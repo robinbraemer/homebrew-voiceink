@@ -3,7 +3,7 @@ DEPS_DIR := $(HOME)/VoiceInk-Dependencies
 WHISPER_CPP_DIR := $(DEPS_DIR)/whisper.cpp
 FRAMEWORK_PATH := $(WHISPER_CPP_DIR)/build-apple/whisper.xcframework
 
-.PHONY: all clean whisper setup build local check healthcheck help dev run
+.PHONY: all clean whisper setup build local check healthcheck help dev run install update
 
 # Default target
 all: check build
@@ -89,6 +89,28 @@ run:
 			exit 1; \
 		fi; \
 	fi
+
+# Install to /Applications
+install: local
+	@echo "Installing VoiceInk to /Applications..."
+	@if [ -d "/Applications/VoiceInk.app" ]; then \
+		echo "Removing existing VoiceInk.app from /Applications..."; \
+		rm -rf "/Applications/VoiceInk.app"; \
+	fi
+	@ditto "$$HOME/Downloads/VoiceInk.app" "/Applications/VoiceInk.app"
+	@xattr -cr "/Applications/VoiceInk.app"
+	@echo "VoiceInk installed to /Applications/VoiceInk.app"
+
+# Sync with upstream and rebuild
+update:
+	@echo "Fetching upstream changes..."
+	@git fetch upstream
+	@echo "Merging upstream/main into main..."
+	@git checkout main
+	@git merge upstream/main -m "Merge upstream changes"
+	@echo "Pushing to origin..."
+	@git push origin main
+	@echo "Upstream changes merged. Run 'make install' to rebuild."
 
 # Cleanup
 clean:

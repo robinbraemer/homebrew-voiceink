@@ -1,0 +1,60 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build VoiceInk
+        run: make local
+
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep -m1 'MARKETING_VERSION' VoiceInk.xcodeproj/project.pbxproj | sed 's/.*= *\([0-9.]*\).*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Zip app bundle
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent ~/Downloads/VoiceInk.app ${{ github.workspace }}/VoiceInk.app.zip
+          shasum -a 256 ${{ github.workspace }}/VoiceInk.app.zip | awk '{print $1}' > /tmp/sha256.txt
+
+      - name: Delete existing release
+        run: gh release delete v${{ steps.version.outputs.version }} --yes 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: VoiceInk v${{ steps.version.outputs.version }}
+          files: ${{ github.workspace }}/VoiceInk.app.zip
+          generate_release_notes: true
+          make_latest: true
+
+      - name: Update Homebrew cask
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          SHA="$(cat /tmp/sha256.txt)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout main
+          sed -i '' "s/version \".*\"/version \"${VERSION}\"/" Casks/voiceink-local.rb
+          sed -i '' "s/sha256 .*/sha256 \"${SHA}\"/" Casks/voiceink-local.rb
+          git add Casks/voiceink-local.rb
+          git diff --cached --quiet || {
+            git commit -m "Update cask to v${VERSION}"
+            git push origin main
+          }
