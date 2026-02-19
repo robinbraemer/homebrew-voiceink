@@ -370,11 +370,19 @@ struct VoiceInkApp: App {
 class UpdaterViewModel: ObservableObject {
     @AppStorage("autoUpdateCheck") private var autoUpdateCheck = true
 
+    #if !LOCAL_BUILD
     private let updaterController: SPUStandardUpdaterController
+    #endif
 
     @Published var canCheckForUpdates = false
+    @Published var updateAvailableVersion: String?
+
+    private static let brewCommand = "brew upgrade --cask voiceink-local"
 
     init() {
+        #if LOCAL_BUILD
+        canCheckForUpdates = true
+        #else
         updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
         // Enable automatic update checking
@@ -383,22 +391,89 @@ class UpdaterViewModel: ObservableObject {
 
         updaterController.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
+        #endif
     }
 
     func toggleAutoUpdates(_ value: Bool) {
+        #if !LOCAL_BUILD
         updaterController.updater.automaticallyChecksForUpdates = value
+        #endif
     }
 
     func checkForUpdates() {
-        // This is for manual checks - will show UI
+        #if LOCAL_BUILD
+        checkAppcastForUpdates()
+        #else
         updaterController.checkForUpdates(nil)
+        #endif
     }
 
     func silentlyCheckForUpdates() {
-        // This checks for updates in the background without showing UI unless an update is found
+        #if LOCAL_BUILD
+        checkAppcastForUpdates()
+        #else
         updaterController.updater.checkForUpdatesInBackground()
+        #endif
+    }
+
+    #if LOCAL_BUILD
+    private func checkAppcastForUpdates() {
+        guard let appcastURL = URL(string: "https://beingpax.github.io/VoiceInk/appcast.xml") else { return }
+        URLSession.shared.dataTask(with: appcastURL) { [weak self] data, _, error in
+            guard let data = data, error == nil else { return }
+            let parser = AppcastParser()
+            if let latestVersion = parser.parseLatestVersion(from: data),
+               let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+               latestVersion.compare(currentVersion, options: .numeric) == .orderedDescending {
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.updateAvailableVersion = latestVersion
+                    self.copyBrewCommand()
+                    NotificationManager.shared.showNotification(
+                        title: "VoiceInk v\(latestVersion) available — brew command copied to clipboard",
+                        type: .info,
+                        duration: 5.0,
+                        onTap: { self.copyBrewCommand() }
+                    )
+                }
+            }
+        }.resume()
+    }
+    #endif
+
+    func copyBrewCommand() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(Self.brewCommand, forType: .string)
     }
 }
+
+#if LOCAL_BUILD
+private class AppcastParser: NSObject, XMLParserDelegate {
+    private var latestVersion: String?
+    private var currentElement = ""
+
+    func parseLatestVersion(from data: Data) -> String? {
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        parser.parse()
+        return latestVersion
+    }
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName: String?, attributes: [String: String] = [:]) {
+        currentElement = elementName
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if currentElement == "sparkle:shortVersionString" {
+            if latestVersion == nil || trimmed.compare(latestVersion!, options: .numeric) == .orderedDescending {
+                latestVersion = trimmed
+            }
+        }
+    }
+}
+#endif
 
 struct CheckForUpdatesView: View {
     @ObservedObject var updaterViewModel: UpdaterViewModel
