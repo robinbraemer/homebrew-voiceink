@@ -56,11 +56,12 @@ jobs:
           make check setup
           xcodebuild -project VoiceInk.xcodeproj -scheme VoiceInk -configuration Debug \
             -derivedDataPath .local-build \
-            -xcconfig LocalBuild.xcconfig \
             CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+            CODE_SIGN_STYLE=Manual \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGN_ENTITLEMENTS=$(pwd)/VoiceInk/VoiceInk.local.entitlements \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) LOCAL_BUILD' \
             build

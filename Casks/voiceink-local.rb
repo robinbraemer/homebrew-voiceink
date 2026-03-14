@@ -1,7 +1,7 @@
 cask "voiceink-local" do
   conflicts_with cask: "voiceink"
 
-  version "1.71"
+  version "1.73"
   sha256 :no_check
 
   url "https://github.com/robinbraemer/homebrew-voiceink/releases/download/v#{version}/VoiceInk.app.zip"
