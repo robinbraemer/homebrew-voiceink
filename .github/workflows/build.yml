@@ -99,6 +99,36 @@ jobs:
           generate_release_notes: true
           make_latest: true
 
+      - name: Verify release asset is downloadable
+        run: |
+          URL="https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/VoiceInk.app.zip"
+          for attempt in 1 2 3 4 5; do
+            CODE=$(curl -sL -o /dev/null -w "%{http_code}" "$URL")
+            if [ "$CODE" = "200" ]; then
+              echo "Release asset reachable: $URL"
+              exit 0
+            fi
+            echo "Attempt $attempt got HTTP $CODE, retrying in 5s..."
+            sleep 5
+          done
+          echo "::error::Release asset never became reachable: $URL"
+          exit 1
+
+      - name: Sync cask to released version
+        run: |
+          git fetch origin main
+          git checkout main
+          sed -i '' -E "s/^  version \".*\"/  version \"${{ steps.version.outputs.version }}\"/" Casks/voiceink-local.rb
+          if git diff --quiet -- Casks/voiceink-local.rb; then
+            echo "Cask already at v${{ steps.version.outputs.version }}, nothing to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Casks/voiceink-local.rb
+            git commit -m "Bump voiceink-local cask to v${{ steps.version.outputs.version }} [skip ci]"
+            git push origin main
+          fi
+
       - name: Cleanup keychain
         if: always()
         run: security delete-keychain $RUNNER_TEMP/signing.keychain-db 2>/dev/null || true
