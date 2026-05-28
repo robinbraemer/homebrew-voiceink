@@ -64,6 +64,7 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGN_ENTITLEMENTS=$(pwd)/VoiceInk/VoiceInk.local.entitlements \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) LOCAL_BUILD' \
+            ENABLE_DEBUG_DYLIB=NO \
             build
 
       - name: Prepare app bundle
