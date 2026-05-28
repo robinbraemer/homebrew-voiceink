@@ -76,6 +76,22 @@ jobs:
           ditto "$APP_PATH" ~/Downloads/VoiceInk.app
           xattr -cr ~/Downloads/VoiceInk.app
 
+      - name: Verify stable signing identity (protects user TCC permissions)
+        run: |
+          # macOS keeps Accessibility/Input-Monitoring grants only while the app's
+          # designated requirement is unchanged. If the signing certificate is ever
+          # rotated, the cert root hash changes and EVERY user silently loses their
+          # permissions on the next upgrade. Pin the expected root and fail loudly
+          # so a permission-breaking release can never ship by accident.
+          EXPECTED_CERT_ROOT="c8d964b6d711700e722fde2117cf9a49f51eacda"
+          DR=$(codesign -d -r- ~/Downloads/VoiceInk.app 2>&1)
+          echo "$DR"
+          if ! echo "$DR" | grep -q "certificate root = H\"$EXPECTED_CERT_ROOT\""; then
+            echo "::error::Signing cert root changed. Upgrading users would lose Accessibility/TCC permissions. Expected root $EXPECTED_CERT_ROOT. If the cert was intentionally rotated, update EXPECTED_CERT_ROOT here."
+            exit 1
+          fi
+          echo "Signing identity stable; user permissions will persist across upgrade."
+
       - name: Get version
         id: version
         run: |
