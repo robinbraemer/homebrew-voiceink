@@ -4,7 +4,7 @@ WHISPER_CPP_DIR := $(DEPS_DIR)/whisper.cpp
 FRAMEWORK_PATH := $(WHISPER_CPP_DIR)/build-apple/whisper.xcframework
 LOCAL_DERIVED_DATA := $(CURDIR)/.local-build
 
-.PHONY: all clean whisper setup build local check healthcheck help dev run install update
+.PHONY: all clean whisper setup build local check healthcheck help dev run install update release release-setup
 
 # Default target
 all: check build
@@ -138,6 +138,18 @@ update:
 	@git push origin main
 	@echo "Upstream changes merged. Run 'make install' to rebuild."
 
+# Build a signed, notarized DMG and matching local Sparkle Appcast.
+release: whisper
+	@if [ -n "$(NOTES)" ]; then \
+		./scripts/release.sh --notes "$(NOTES)" $(RELEASE_ARGS); \
+	else \
+		./scripts/release.sh $(RELEASE_ARGS); \
+	fi
+
+# Store Apple's notarization credentials securely in Keychain.
+release-setup:
+	@./scripts/setup-release-notarization.sh
+
 # Cleanup
 clean:
 	@echo "Cleaning build artifacts..."
@@ -152,8 +164,12 @@ help:
 	@echo "  setup              Copy whisper XCFramework to VoiceInk project"
 	@echo "  build              Build the VoiceInk Xcode project"
 	@echo "  local              Build for local use (no Apple Developer certificate needed)"
+	@echo "  install            Build and install the Homebrew-style local app"
+	@echo "  update             Merge upstream main into the local fork"
 	@echo "  run                Launch the built VoiceInk app"
 	@echo "  dev                Build and run the app (for development)"
+	@echo "  release            Build DMG and Appcast using release-notes/<version>.html"
+	@echo "  release-setup      Store notarization credentials in Keychain"
 	@echo "  all                Run full build process (default)"
 	@echo "  clean              Remove build artifacts"
 	@echo "  help               Show this help message"
