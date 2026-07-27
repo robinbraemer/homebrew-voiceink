@@ -7,13 +7,16 @@ on:
 
 permissions:
   contents: write
-  actions: write
+
+concurrency:
+  group: voiceink-release
+  cancel-in-progress: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -39,12 +42,14 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Rebase our commits on top of upstream
+      - name: Merge upstream changes
         if: steps.check.outputs.has_changes == 'true'
         run: |
-          if ! git rebase upstream/main; then
-            echo "::error::Rebase conflict detected. Resolve manually: git fetch upstream && git rebase upstream/main"
-            git rebase --abort
+          if ! git merge --no-edit upstream/main; then
+            CONFLICTS=$(git diff --name-only --diff-filter=U | tr '\n' ' ')
+            echo "::error::Upstream merge conflict in: ${CONFLICTS}"
+            echo "::error::Resolve locally with: git fetch upstream && git merge upstream/main"
+            git merge --abort
             exit 1
           fi
 
@@ -59,12 +64,12 @@ jobs:
           sed -i "s/version \".*\"/version \"${VERSION}\"/" Casks/voiceink-local.rb
           if ! git diff --quiet Casks/voiceink-local.rb; then
             git add Casks/voiceink-local.rb
-            git commit --amend --no-edit
+            git commit -m "Update voiceink-local cask to v${VERSION}"
           fi
 
-      - name: Push rebased main
+      - name: Push updated main
         if: steps.check.outputs.has_changes == 'true'
-        run: git push origin main --force-with-lease
+        run: git push origin HEAD:main
 
       - name: Tag and trigger build
         if: steps.check.outputs.has_changes == 'true'

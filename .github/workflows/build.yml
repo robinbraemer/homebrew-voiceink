@@ -9,11 +9,15 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: voiceink-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Import signing certificate
         env:
