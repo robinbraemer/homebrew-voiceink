@@ -24,8 +24,10 @@ jobs:
           SIGNING_CERTIFICATE_P12: ${{ secrets.SIGNING_CERTIFICATE_P12 }}
           SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
         run: |
-          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          CERTIFICATE_PATH="$RUNNER_TEMP/cert.p12"
+          CERTIFICATE_PEM_PATH="$RUNNER_TEMP/cert.pem"
 
           # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -33,21 +35,22 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           # Import certificate + key from p12
-          echo "$SIGNING_CERTIFICATE_P12" | base64 --decode > $RUNNER_TEMP/cert.p12
-          security import $RUNNER_TEMP/cert.p12 -P "$SIGNING_CERTIFICATE_PASSWORD" \
+          echo "$SIGNING_CERTIFICATE_P12" | base64 --decode > "$CERTIFICATE_PATH"
+          security import "$CERTIFICATE_PATH" -P "$SIGNING_CERTIFICATE_PASSWORD" \
             -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
 
           # Extract cert and trust it for code signing
-          openssl pkcs12 -in $RUNNER_TEMP/cert.p12 -clcerts -nokeys \
-            -passin pass:"$SIGNING_CERTIFICATE_PASSWORD" -out $RUNNER_TEMP/cert.pem
+          openssl pkcs12 -in "$CERTIFICATE_PATH" -clcerts -nokeys \
+            -passin pass:"$SIGNING_CERTIFICATE_PASSWORD" -out "$CERTIFICATE_PEM_PATH"
           sudo security add-trusted-cert -d -r trustRoot -p codeSign \
-            -k "$KEYCHAIN_PATH" $RUNNER_TEMP/cert.pem
+            -k "$KEYCHAIN_PATH" "$CERTIFICATE_PEM_PATH"
 
           # Allow codesign to use it without prompt
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           # Add to search list
+          # shellcheck disable=SC2046
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
 
           # Get the identity name for later steps
@@ -58,6 +61,7 @@ jobs:
       - name: Build VoiceInk
         run: |
           make check setup
+          # shellcheck disable=SC2016
           xcodebuild -project VoiceInk.xcodeproj -scheme VoiceInk -configuration Debug \
             -derivedDataPath .local-build \
             CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
@@ -66,7 +70,7 @@ jobs:
             CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            CODE_SIGN_ENTITLEMENTS=$(pwd)/VoiceInk/VoiceInk.local.entitlements \
+            CODE_SIGN_ENTITLEMENTS="$PWD/VoiceInk/VoiceInk.local.entitlements" \
             SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) LOCAL_BUILD' \
             ENABLE_DEBUG_DYLIB=NO \
             build
@@ -152,4 +156,4 @@ jobs:
 
       - name: Cleanup keychain
         if: always()
-        run: security delete-keychain $RUNNER_TEMP/signing.keychain-db 2>/dev/null || true
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
