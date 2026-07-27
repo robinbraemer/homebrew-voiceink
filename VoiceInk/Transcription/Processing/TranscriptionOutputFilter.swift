@@ -1,14 +1,10 @@
 import Foundation
 
 struct TranscriptionOutputFilter {
-    private static let removePunctuationKey = "RemovePunctuation"
-    private static let lowercaseTranscriptionKey = "LowercaseTranscription"
-    private static let apostropheLikeCharacters = CharacterSet(charactersIn: "'’‘ʼ＇")
-    
     private static let hallucinationPatterns = [
-        #"\[.*?\]"#,     // []
-        #"\(.*?\)"#,     // ()
-        #"\{.*?\}"#      // {}
+        #"\[.*?\]"#,  // []
+        #"\(.*?\)"#,  // ()
+        #"\{.*?\}"#,  // {}
     ]
 
     static func filter(_ text: String) -> String {
@@ -25,18 +21,18 @@ struct TranscriptionOutputFilter {
         for pattern in hallucinationPatterns {
             if let regex = try? NSRegularExpression(pattern: pattern) {
                 let range = NSRange(filteredText.startIndex..., in: filteredText)
-                filteredText = regex.stringByReplacingMatches(in: filteredText, options: [], range: range, withTemplate: "")
+                filteredText = regex.stringByReplacingMatches(
+                    in: filteredText, options: [], range: range, withTemplate: "")
             }
         }
 
-        // Remove filler words (if enabled)
-        if FillerWordManager.shared.isEnabled {
-            for fillerWord in FillerWordManager.shared.fillerWords {
-                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: fillerWord))\\b[,.]?"
-                if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
-                    let range = NSRange(filteredText.startIndex..., in: filteredText)
-                    filteredText = regex.stringByReplacingMatches(in: filteredText, options: [], range: range, withTemplate: "")
-                }
+        // Remove configured filler words. An empty list is naturally a no-op.
+        for fillerWord in FillerWordManager.shared.fillerWords {
+            let pattern = "\\b\(NSRegularExpression.escapedPattern(for: fillerWord))\\b[,.]?"
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                let range = NSRange(filteredText.startIndex..., in: filteredText)
+                filteredText = regex.stringByReplacingMatches(
+                    in: filteredText, options: [], range: range, withTemplate: "")
             }
         }
 
@@ -46,50 +42,4 @@ struct TranscriptionOutputFilter {
 
         return filteredText
     }
-
-    static func applyUserCleanupPreferences(_ text: String) -> String {
-        let shouldRemovePunctuation = UserDefaults.standard.bool(forKey: removePunctuationKey)
-        let shouldLowercase = UserDefaults.standard.bool(forKey: lowercaseTranscriptionKey)
-
-        guard shouldRemovePunctuation || shouldLowercase else {
-            return text
-        }
-
-        var cleanedText = text
-        if shouldRemovePunctuation {
-            cleanedText = removePunctuation(from: cleanedText)
-        }
-        if shouldLowercase {
-            cleanedText = cleanedText.lowercased()
-        }
-
-        return cleanedText
-    }
-
-    static func removePunctuation(from text: String) -> String {
-        guard !text.isEmpty else { return text }
-
-        let punctuationSeparators = CharacterSet.punctuationCharacters.subtracting(apostropheLikeCharacters)
-        let cleanedScalars = text.unicodeScalars.map { scalar -> String in
-            if apostropheLikeCharacters.contains(scalar) {
-                return ""
-            }
-
-            if punctuationSeparators.contains(scalar) {
-                return " "
-            }
-
-            return String(scalar)
-        }
-
-        return normalizeWhitespace(cleanedScalars.joined())
-    }
-
-    private static func normalizeWhitespace(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: #"[^\S\r\n]{2,}"#, with: " ", options: .regularExpression)
-            .replacingOccurrences(of: #"[ \t]+\n"#, with: "\n", options: .regularExpression)
-            .replacingOccurrences(of: #"\n[ \t]+"#, with: "\n", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-} 
+}

@@ -2,8 +2,8 @@ import SwiftUI
 
 // Define a display mode for flexible usage
 enum LanguageDisplayMode {
-    case full // For settings page with descriptions
-    case menuItem // For menu bar with compact layout
+    case full  // For settings page with descriptions
+    case menuItem  // For menu bar with compact layout
 }
 
 struct LanguageSelectionView: View {
@@ -39,7 +39,7 @@ struct LanguageSelectionView: View {
         guard let provider = transcriptionModelManager.currentTranscriptionModel?.provider else {
             return false
         }
-        return provider == .fluidAudio || provider == .gemini
+        return provider == .gemini
     }
 
     private func isNativeAppleModelSelected() -> Bool {
@@ -48,7 +48,7 @@ struct LanguageSelectionView: View {
 
     private func availableLanguagesForCurrentModel() -> [String: String] {
         guard let currentModel = transcriptionModelManager.currentTranscriptionModel else {
-            return ["en": "English"] // Default to English if no model found
+            return ["en": "English"]  // Default to English if no model found
         }
         return TranscriptionLanguageSupport.languages(for: currentModel)
     }
@@ -104,23 +104,18 @@ struct LanguageSelectionView: View {
             languageSelectionSection
         }
     }
-    
+
     private var languageSelectionSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Transcription Language")
                 .font(.headline)
 
-            if let currentModel = transcriptionModelManager.currentTranscriptionModel
-            {
+            if transcriptionModelManager.currentTranscriptionModel != nil {
                 if languageSelectionDisabled() {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Language: Autodetected")
                             .font(.subheadline)
                             .foregroundColor(.primary)
-
-                        Text("Current model: \(currentModel.displayName)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
 
                         Text("The transcription language is automatically detected by the model.")
                             .font(.caption)
@@ -149,10 +144,6 @@ struct LanguageSelectionView: View {
                             }
                         }
 
-                        Text("Current model: \(currentModel.displayName)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
                         Text(
                             "This model supports multiple languages. Select a specific language or auto-detect(if available)"
                         )
@@ -165,10 +156,6 @@ struct LanguageSelectionView: View {
                         Text("Language: English")
                             .font(.subheadline)
                             .foregroundColor(.primary)
-
-                        Text("Current model: \(currentModel.displayName)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
 
                         Text(
                             "This is an English-optimized model and only supports English transcription."
@@ -189,7 +176,7 @@ struct LanguageSelectionView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(NSColor.controlBackgroundColor))
+        .background(AppTheme.Surface.control)
         .cornerRadius(10)
     }
 
@@ -227,7 +214,7 @@ struct LanguageSelectionView: View {
                         }
                     } label: {
                         HStack {
-                            Text("Language: \(currentLanguageDisplayName())")
+                            Text(String(format: String(localized: "Language: %@"), currentLanguageDisplayName()))
                             Image(systemName: "chevron.up.chevron.down")
                                 .font(.system(size: 10))
                         }
